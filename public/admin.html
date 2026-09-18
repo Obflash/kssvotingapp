@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Election Dashboard | Kumasi STEM JHS</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="admin-page">
+    <header class="topbar admin-header">
+      <div class="container nav">
+        <div class="brand-wrap">
+          <div class="brand-mark">K</div>
+          <div>
+            <strong>Kumasi STEM JHS</strong>
+            <small>Election Dashboard</small>
+          </div>
+        </div>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/admin-login.html">Logout</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container dashboard-shell">
+      <div class="dashboard-topbar">
+        <div>
+          <p class="eyebrow">Administration</p>
+          <h1>Election Dashboard</h1>
+        </div>
+        <div class="status-pills">
+          <span id="adminStatusPill" class="status-badge">🟢 Election Live</span>
+        </div>
+      </div>
+
+      <section class="summary-grid" id="summaryGrid"></section>
+
+      <section class="admin-grid">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Election Controls</h3>
+          </div>
+          <div class="button-row">
+            <button data-action="start" class="primary-btn small-btn">Start Election</button>
+            <button data-action="pause" class="secondary-btn small-btn">Pause</button>
+            <button data-action="resume" class="secondary-btn small-btn">Resume</button>
+            <button data-action="close" class="danger-btn small-btn">Close Election</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Quick Settings</h3>
+          </div>
+          <form id="settingsForm" class="stack-form compact-form">
+            <label>
+              School Name
+              <input type="text" id="schoolNameInput" name="schoolName" />
+            </label>
+            <label>
+              Election Title
+              <input type="text" id="electionTitleInput" name="electionTitle" />
+            </label>
+            <label>
+              Results Visibility
+              <select id="resultsVisibilityInput" name="resultsVisibility">
+                <option value="hidden">Hidden</option>
+                <option value="live">Visible during voting</option>
+                <option value="final">Visible after closing</option>
+              </select>
+            </label>
+            <button type="submit" class="primary-btn small-btn">Save Settings</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="admin-grid no-gap">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Positions</h3>
+          </div>
+          <form id="positionForm" class="stack-form compact-form">
+            <label>
+              Position Name
+              <input type="text" id="positionNameInput" placeholder="Example: School President" required />
+            </label>
+            <button type="submit" class="primary-btn small-btn">Add Position</button>
+          </form>
+          <div id="positionList" class="list-panel"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Candidates</h3>
+          </div>
+          <form id="candidateForm" class="stack-form compact-form">
+            <label>
+              Name
+              <input type="text" id="candidateNameInput" placeholder="Candidate full name" required />
+            </label>
+            <label>
+              Position
+              <select id="candidatePositionInput"></select>
+            </label>
+            <label>
+              Class
+              <input type="text" id="candidateClassInput" placeholder="JHS 3A" />
+            </label>
+            <label>
+              Photo URL
+              <input type="url" id="candidatePhotoInput" placeholder="https://..." />
+            </label>
+            <label>
+              Slogan
+              <input type="text" id="candidateSloganInput" placeholder="Campaign slogan" />
+            </label>
+            <button type="submit" class="primary-btn small-btn">Add Candidate</button>
+          </form>
+          <div id="candidateList" class="list-panel"></div>
+        </div>
+      </section>
+
+      <section class="admin-grid no-gap">
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Eligible Students</h3>
+          </div>
+          <form id="studentForm" class="stack-form compact-form">
+            <label>
+              Student ID
+              <input type="text" id="studentIdInput" placeholder="STU-1011" required />
+            </label>
+            <label>
+              Class
+              <input type="text" id="studentClassInput" placeholder="JHS 2B" />
+            </label>
+            <button type="submit" class="primary-btn small-btn">Add Student</button>
+          </form>
+          <div id="studentList" class="list-panel"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Live Results</h3>
+          </div>
+          <div id="resultsPanel" class="results-panel"></div>
+        </div>
+      </section>
+
+      <section class="panel audit-panel">
+        <div class="panel-header">
+          <h3>Audit Log</h3>
+        </div>
+        <div id="auditList" class="audit-list"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

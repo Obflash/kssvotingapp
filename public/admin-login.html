@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Login | Election Dashboard</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="auth-page">
+    <div class="auth-shell">
+      <div class="auth-card wide-card">
+        <div class="auth-brand">
+          <div class="brand-mark">K</div>
+          <div>
+            <h2>Election Admin</h2>
+            <small>Secure access</small>
+          </div>
+        </div>
+
+        <h1>Administrator Login</h1>
+        <p class="muted">Use your school election credentials to access the dashboard.</p>
+
+        <form id="adminLoginForm" class="stack-form">
+          <label>
+            Username
+            <input type="text" id="adminUsername" name="username" placeholder="admin" required />
+          </label>
+
+          <label>
+            Password
+            <input type="password" id="adminPassword" name="password" placeholder="Enter password" required />
+          </label>
+
+          <button type="submit" class="primary-btn full-width">Open Dashboard</button>
+        </form>
+
+        <p id="adminMessage" class="form-message" aria-live="polite"></p>
+        <a class="text-link" href="/">Back to Home</a>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

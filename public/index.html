@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kumasi STEM JHS Student Election Portal</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="landing-page">
+    <header class="topbar">
+      <div class="container nav">
+        <div class="brand-wrap">
+          <div class="brand-mark">K</div>
+          <div>
+            <strong>Kumasi STEM JHS</strong>
+            <small>Student Election</small>
+          </div>
+        </div>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/student-login.html">Election</a>
+          <a href="/admin-login.html">Admin</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container hero-section">
+      <div class="hero-copy">
+        <div class="status-badge" id="homeStatus">🟢 Election Live</div>
+        <h1>Kumasi STEM JHS Student Election Portal</h1>
+        <p class="subtitle">Secure • Simple • Fair • One Student, One Vote</p>
+        <div class="school-meta">
+          <div>
+            <span>School</span>
+            <strong>Kumasi STEM JHS</strong>
+          </div>
+          <div>
+            <span>Election Date</span>
+            <strong id="homeDate">2026 Academic Election</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong id="homeStatusText">Live</strong>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <a href="/student-login.html" class="primary-btn">Enter Voting Portal</a>
+          <a href="/admin-login.html" class="secondary-btn">Admin Login</a>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="logo-box">K</div>
+        <h3>Election Overview</h3>
+        <ul>
+          <li>Student-only login and secure authentication</li>
+          <li>One vote per position</li>
+          <li>Live results visibility based on admin settings</li>
+        </ul>
+      </div>
+    </main>
+
+    <section class="container info-grid">
+      <article class="info-card">
+        <h3>Election Rules</h3>
+        <p>Students vote once per position and can review selections before submitting.</p>
+      </article>
+      <article class="info-card">
+        <h3>Accessibility</h3>
+        <p>High-contrast design, readable text and mobile-friendly voting controls.</p>
+      </article>
+      <article class="info-card">
+        <h3>Security</h3>
+        <p>Server-side validation and duplicate-vote protection keep each election fair.</p>
+      </article>
+    </section>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

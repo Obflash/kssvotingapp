@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vote | Kumasi STEM JHS</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="voting-page">
+    <header class="topbar">
+      <div class="container nav small-nav">
+        <div class="brand-wrap">
+          <div class="brand-mark">K</div>
+          <div>
+            <strong>Kumasi STEM JHS</strong>
+            <small>Voting Portal</small>
+          </div>
+        </div>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/student-login.html">Login</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container ballot-shell">
+      <section class="ballot-header">
+        <div>
+          <p class="eyebrow">Welcome</p>
+          <h1>Welcome to the Kumasi STEM JHS Student Election</h1>
+        </div>
+        <div class="timer-box">
+          <small>Voting closes in</small>
+          <strong id="countdownTimer">--:--:--</strong>
+        </div>
+      </section>
+
+      <div id="voteNotice" class="notice-box"></div>
+      <div id="ballotLoader" class="loader">Loading election ballot...</div>
+      <form id="voteForm" class="vote-form hidden"></form>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
