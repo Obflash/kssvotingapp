@@ -5,16 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Election Dashboard | Kumasi STEM JHS</title>
     <link rel="stylesheet" href="/style.css" />
+    <style>
+      /* ── Photo upload ── */
+      .photo-upload-area { border: 2px dashed var(--line); border-radius: 14px; padding: 18px; text-align: center; cursor: pointer; transition: border-color .2s; position: relative; }
+      .photo-upload-area:hover { border-color: var(--primary); }
+      .photo-upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+      .photo-preview { width: 80px; height: 80px; border-radius: 12px; object-fit: cover; margin: 0 auto 8px; display: block; border: 2px solid var(--line); }
+      .photo-preview.hidden { display: none; }
+      .upload-hint { color: var(--muted); font-size: .85rem; pointer-events: none; }
+
+      /* ── CSV import ── */
+      .csv-drop-area { border: 2px dashed var(--line); border-radius: 14px; padding: 24px; text-align: center; cursor: pointer; transition: border-color .2s; position: relative; }
+      .csv-drop-area:hover, .csv-drop-area.drag-over { border-color: var(--primary); background: var(--primary-soft); }
+      .csv-drop-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+      .csv-status { margin-top: 10px; font-weight: 700; font-size: .9rem; }
+      .csv-preview-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .8rem; overflow-x: auto; display: block; }
+      .csv-preview-table th, .csv-preview-table td { padding: 6px 10px; border: 1px solid var(--line); text-align: left; white-space: nowrap; }
+      .csv-preview-table th { background: var(--primary-soft); }
+
+      /* ── Results / print ── */
+      .results-report { display: grid; gap: 20px; }
+      .winner-card { display: flex; align-items: center; gap: 18px; padding: 18px; border-radius: 18px; background: linear-gradient(135deg,#edf5ff,#fff); border: 2px solid var(--primary-soft); }
+      .winner-photo { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary); flex-shrink: 0; }
+      .winner-info h4 { margin: 0 0 4px; font-size: 1.1rem; }
+      .winner-info p { margin: 0; color: var(--muted); font-size: .85rem; }
+      .winner-badge { margin-top: 6px; display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--primary); color: #fff; font-size: .8rem; font-weight: 700; }
+      .position-result-block { background: var(--panel); border-radius: 18px; border: 1px solid var(--line); padding: 20px; }
+      .position-result-block h3 { margin: 0 0 14px; color: var(--primary); border-bottom: 2px solid var(--primary-soft); padding-bottom: 8px; }
+      .bar-row { display: grid; grid-template-columns: 160px 1fr 60px; align-items: center; gap: 10px; margin-bottom: 10px; font-size: .9rem; }
+      .bar-fill { height: 12px; border-radius: 999px; background: linear-gradient(135deg,var(--primary),#5ea0ff); transition: width .4s; }
+      .bar-bg { background: #e8eefb; border-radius: 999px; overflow: hidden; }
+
+      /* ── Analytics ── */
+      .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+      .analytics-card { background: var(--panel); border-radius: 16px; border: 1px solid var(--line); padding: 18px; }
+      .analytics-card h4 { margin: 0 0 12px; font-size: 1rem; color: var(--primary); }
+      .section-row { display: flex; justify-content: space-between; font-size: .85rem; padding: 4px 0; border-bottom: 1px solid var(--line); }
+      .section-row:last-child { border-bottom: none; }
+
+      /* ── Tabs ── */
+      .tab-nav { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 2px solid var(--line); margin-bottom: 20px; }
+      .tab-btn { padding: 10px 20px; border: none; background: none; cursor: pointer; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 8px 8px 0 0; transition: .2s; }
+      .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--primary-soft); }
+      .tab-pane { display: none; }
+      .tab-pane.active { display: block; }
+
+      /* ── Print ── */
+      @media print {
+        body * { visibility: hidden; }
+        #printSection, #printSection * { visibility: visible; }
+        #printSection { position: fixed; inset: 0; background: #fff; padding: 30px; }
+        .no-print { display: none !important; }
+      }
+    </style>
   </head>
   <body class="admin-page">
     <header class="topbar admin-header">
       <div class="container nav">
         <div class="brand-wrap">
           <div class="brand-mark">K</div>
-          <div>
-            <strong>Kumasi STEM JHS</strong>
-            <small>Election Dashboard</small>
-          </div>
+          <div><strong>Kumasi STEM JHS</strong><small>Election Dashboard</small></div>
         </div>
         <nav class="nav-links">
           <a href="/">Home</a>
@@ -36,124 +86,190 @@
 
       <section class="summary-grid" id="summaryGrid"></section>
 
-      <section class="admin-grid">
-        <div class="panel">
-          <div class="panel-header">
-            <h3>Election Controls</h3>
+      <!-- ── TABS ── -->
+      <div class="tab-nav" role="tablist">
+        <button class="tab-btn active" data-tab="controls">Controls</button>
+        <button class="tab-btn" data-tab="positions">Positions</button>
+        <button class="tab-btn" data-tab="candidates">Candidates</button>
+        <button class="tab-btn" data-tab="students">Students</button>
+        <button class="tab-btn" data-tab="results">Results &amp; Print</button>
+        <button class="tab-btn" data-tab="analytics">Analytics</button>
+        <button class="tab-btn" data-tab="audit">Audit Log</button>
+      </div>
+
+      <!-- ── TAB: Controls + Settings ── -->
+      <div class="tab-pane active" id="tab-controls">
+        <div class="admin-grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Election Controls</h3></div>
+            <div class="button-row">
+              <button data-action="start" class="primary-btn small-btn">Start Election</button>
+              <button data-action="pause" class="secondary-btn small-btn">Pause</button>
+              <button data-action="resume" class="secondary-btn small-btn">Resume</button>
+              <button data-action="close" class="danger-btn small-btn">Close Election</button>
+            </div>
           </div>
-          <div class="button-row">
-            <button data-action="start" class="primary-btn small-btn">Start Election</button>
-            <button data-action="pause" class="secondary-btn small-btn">Pause</button>
-            <button data-action="resume" class="secondary-btn small-btn">Resume</button>
-            <button data-action="close" class="danger-btn small-btn">Close Election</button>
+          <div class="panel">
+            <div class="panel-header"><h3>Quick Settings</h3></div>
+            <form id="settingsForm" class="stack-form compact-form">
+              <label>School Name<input type="text" id="schoolNameInput" name="schoolName" /></label>
+              <label>Election Title<input type="text" id="electionTitleInput" name="electionTitle" /></label>
+              <label>Results Visibility
+                <select id="resultsVisibilityInput" name="resultsVisibility">
+                  <option value="hidden">Hidden</option>
+                  <option value="live">Visible during voting</option>
+                  <option value="final">Visible after closing</option>
+                </select>
+              </label>
+              <button type="submit" class="primary-btn small-btn">Save Settings</button>
+            </form>
           </div>
         </div>
+        <p id="adminMessage" class="form-message"></p>
+      </div>
 
+      <!-- ── TAB: Positions ── -->
+      <div class="tab-pane" id="tab-positions">
         <div class="panel">
-          <div class="panel-header">
-            <h3>Quick Settings</h3>
-          </div>
-          <form id="settingsForm" class="stack-form compact-form">
-            <label>
-              School Name
-              <input type="text" id="schoolNameInput" name="schoolName" />
-            </label>
-            <label>
-              Election Title
-              <input type="text" id="electionTitleInput" name="electionTitle" />
-            </label>
-            <label>
-              Results Visibility
-              <select id="resultsVisibilityInput" name="resultsVisibility">
-                <option value="hidden">Hidden</option>
-                <option value="live">Visible during voting</option>
-                <option value="final">Visible after closing</option>
-              </select>
-            </label>
-            <button type="submit" class="primary-btn small-btn">Save Settings</button>
-          </form>
-        </div>
-      </section>
-
-      <section class="admin-grid no-gap">
-        <div class="panel">
-          <div class="panel-header">
-            <h3>Positions</h3>
-          </div>
+          <div class="panel-header"><h3>Positions</h3></div>
           <form id="positionForm" class="stack-form compact-form">
-            <label>
-              Position Name
-              <input type="text" id="positionNameInput" placeholder="Example: School President" required />
-            </label>
+            <label>Position Name<input type="text" id="positionNameInput" placeholder="Example: School President" required /></label>
             <button type="submit" class="primary-btn small-btn">Add Position</button>
           </form>
           <div id="positionList" class="list-panel"></div>
         </div>
+      </div>
 
+      <!-- ── TAB: Candidates ── -->
+      <div class="tab-pane" id="tab-candidates">
         <div class="panel">
-          <div class="panel-header">
-            <h3>Candidates</h3>
-          </div>
+          <div class="panel-header"><h3>Add Candidate</h3></div>
           <form id="candidateForm" class="stack-form compact-form">
-            <label>
-              Name
-              <input type="text" id="candidateNameInput" placeholder="Candidate full name" required />
+            <label>Full Name<input type="text" id="candidateNameInput" placeholder="Candidate full name" required /></label>
+            <label>Position<select id="candidatePositionInput"></select></label>
+            <label>Class<input type="text" id="candidateClassInput" placeholder="JHS 3A" /></label>
+            <label>Slogan<input type="text" id="candidateSloganInput" placeholder="Campaign slogan" /></label>
+            <label>Manifesto<textarea id="candidateManifestoInput" placeholder="Candidate manifesto..." rows="3" style="resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--line);font:inherit;width:100%;"></textarea></label>
+            <label>Candidate Photo</label>
+            <div class="photo-upload-area" id="photoUploadArea">
+              <img id="photoPreview" class="photo-preview hidden" src="" alt="Preview" />
+              <p class="upload-hint" id="uploadHint">📁 Click or drag an image here to upload from your device</p>
+              <input type="file" id="candidatePhotoFile" accept="image/*" />
+            </div>
+            <label style="margin-top:8px;">Or paste an image URL instead
+              <input type="url" id="candidatePhotoUrl" placeholder="https://..." />
             </label>
-            <label>
-              Position
-              <select id="candidatePositionInput"></select>
-            </label>
-            <label>
-              Class
-              <input type="text" id="candidateClassInput" placeholder="JHS 3A" />
-            </label>
-            <label>
-              Photo URL
-              <input type="url" id="candidatePhotoInput" placeholder="https://..." />
-            </label>
-            <label>
-              Slogan
-              <input type="text" id="candidateSloganInput" placeholder="Campaign slogan" />
-            </label>
+            <input type="hidden" id="candidatePhotoFinal" />
             <button type="submit" class="primary-btn small-btn">Add Candidate</button>
           </form>
-          <div id="candidateList" class="list-panel"></div>
+          <div id="candidateList" class="list-panel" style="margin-top:20px;"></div>
         </div>
-      </section>
+      </div>
 
-      <section class="admin-grid no-gap">
-        <div class="panel">
-          <div class="panel-header">
-            <h3>Eligible Students</h3>
+      <!-- ── TAB: Students ── -->
+      <div class="tab-pane" id="tab-students">
+        <div class="admin-grid">
+          <div class="panel">
+            <div class="panel-header"><h3>Add Single Student</h3></div>
+            <form id="studentForm" class="stack-form compact-form">
+              <label>Student ID <span style="color:var(--danger)">*</span><input type="text" id="studentIdInput" placeholder="STU-1011" required /></label>
+              <label>First Name<input type="text" id="stuFirstNameInput" placeholder="Kofi" /></label>
+              <label>Middle Name<input type="text" id="stuMiddleNameInput" placeholder="(optional)" /></label>
+              <label>Last Name<input type="text" id="stuLastNameInput" placeholder="Mensah" /></label>
+              <label>Date of Birth<input type="date" id="stuDobInput" /></label>
+              <label>Gender
+                <select id="stuGenderInput">
+                  <option value="">— Select —</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label>Email<input type="email" id="stuEmailInput" placeholder="student@school.edu" /></label>
+              <label>Phone<input type="tel" id="stuPhoneInput" placeholder="+233..." /></label>
+              <label>Class<input type="text" id="studentClassInput" placeholder="JHS 2B" /></label>
+              <label>Section<input type="text" id="studentSectionInput" placeholder="A" /></label>
+              <button type="submit" class="primary-btn small-btn">Add Student</button>
+            </form>
           </div>
-          <form id="studentForm" class="stack-form compact-form">
-            <label>
-              Student ID
-              <input type="text" id="studentIdInput" placeholder="STU-1011" required />
-            </label>
-            <label>
-              Class
-              <input type="text" id="studentClassInput" placeholder="JHS 2B" />
-            </label>
-            <button type="submit" class="primary-btn small-btn">Add Student</button>
-          </form>
-          <div id="studentList" class="list-panel"></div>
-        </div>
 
-        <div class="panel">
-          <div class="panel-header">
-            <h3>Live Results</h3>
+          <div class="panel">
+            <div class="panel-header"><h3>Bulk Import via CSV</h3></div>
+            <p class="muted" style="font-size:.85rem;margin-bottom:12px;">
+              Required columns (tab or comma separated):<br>
+              <code style="font-size:.78rem;background:#f0f4ff;padding:4px 8px;border-radius:6px;">student_id, first_name, middle_name, last_name, date_of_birth, gender, email, phone, class_name, section_name</code>
+            </p>
+            <a id="csvTemplateBtn" href="#" class="secondary-btn small-btn" style="display:inline-block;margin-bottom:14px;">⬇ Download CSV Template</a>
+            <div class="csv-drop-area" id="csvDropArea">
+              <p style="margin:0;pointer-events:none;">📂 Click or drag a CSV file here</p>
+              <input type="file" id="csvFileInput" accept=".csv,.tsv,.txt" />
+            </div>
+            <p id="csvStatus" class="csv-status"></p>
+            <div style="overflow-x:auto;"><table id="csvPreviewTable" class="csv-preview-table"></table></div>
+            <div id="csvImportActions" style="display:none;margin-top:14px;" class="button-row">
+              <button id="csvImportBtn" class="primary-btn small-btn">Import All Students</button>
+              <button id="csvClearBtn" class="secondary-btn small-btn">Clear</button>
+            </div>
           </div>
-          <div id="resultsPanel" class="results-panel"></div>
         </div>
-      </section>
+        <div id="studentList" class="list-panel" style="margin-top:20px;"></div>
+      </div>
 
-      <section class="panel audit-panel">
-        <div class="panel-header">
-          <h3>Audit Log</h3>
+      <!-- ── TAB: Results & Print ── -->
+      <div class="tab-pane" id="tab-results">
+        <div class="button-row no-print" style="margin-bottom:20px;">
+          <button id="printResultsBtn" class="primary-btn small-btn">🖨 Print Results</button>
+          <button id="refreshResultsBtn" class="secondary-btn small-btn">↻ Refresh</button>
         </div>
-        <div id="auditList" class="audit-list"></div>
-      </section>
+
+        <div id="printSection">
+          <div id="printHeader" style="text-align:center;margin-bottom:24px;display:none;">
+            <h2 id="printSchoolName" style="margin:0;"></h2>
+            <h3 id="printElectionTitle" style="margin:4px 0;color:var(--primary);"></h3>
+            <p id="printResultStatus" style="margin:0;font-weight:700;"></p>
+            <p style="margin:4px 0;color:var(--muted);font-size:.85rem;">Printed on <span id="printDate"></span></p>
+            <hr style="margin:16px 0;" />
+          </div>
+
+          <!-- Winners summary -->
+          <div class="panel" style="margin-bottom:20px;">
+            <div class="panel-header">
+              <h3>🏆 Winners</h3>
+              <span id="resultsStatusLabel" class="status-badge"></span>
+            </div>
+            <div id="winnersGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:14px;"></div>
+          </div>
+
+          <!-- Full results breakdown -->
+          <div id="resultsReport" class="results-report"></div>
+
+          <!-- Turnout summary for print -->
+          <div id="turnoutSummary" style="margin-top:20px;display:none;">
+            <div class="panel">
+              <h3>Turnout Summary</h3>
+              <div id="turnoutDetail"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Analytics ── -->
+      <div class="tab-pane" id="tab-analytics">
+        <div class="panel" style="margin-bottom:20px;">
+          <div class="panel-header"><h3>Vote Distribution by Class &amp; Section</h3></div>
+          <p class="muted" style="font-size:.85rem;">Shows how many unique voters and total votes came from each class and section.</p>
+          <div id="analyticsGrid" class="analytics-grid" style="margin-top:16px;"></div>
+        </div>
+      </div>
+
+      <!-- ── TAB: Audit Log ── -->
+      <div class="tab-pane" id="tab-audit">
+        <div class="panel audit-panel">
+          <div class="panel-header"><h3>Audit Log</h3></div>
+          <div id="auditList" class="audit-list"></div>
+        </div>
+      </div>
+
     </main>
 
     <script src="/app.js"></script>
