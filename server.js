@@ -124,11 +124,16 @@ async function seedElectionIfNeeded() {
     if (res.rows.length > 0) {
       state.dbElectionId = res.rows[0].id;
       console.log('Using existing DB election id:', state.dbElectionId);
+
+      // Sync positions & candidates from DB into memory state
+      await syncElectionFromDb();
       return;
     }
+
+    // ── Create election ────────────────────────────────────────────────────────
     const now = new Date();
     const start = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-    const end = new Date(now.getTime() + 28 * 60 * 60 * 1000);
+    const end   = new Date(now.getTime() + 28 * 60 * 60 * 1000);
     const ins = await dbClient.query(
       `INSERT INTO elections (name, subtitle, school_name, start_time, end_time, status, results_visibility)
        VALUES ($1,$2,$3,$4,$5,'live','live') RETURNING id`,
@@ -136,6 +141,33 @@ async function seedElectionIfNeeded() {
     );
     state.dbElectionId = ins.rows[0].id;
     console.log('Seeded new DB election id:', state.dbElectionId);
+
+    // ── Seed positions ─────────────────────────────────────────────────────────
+    for (const pos of state.positions) {
+      const pr = await dbClient.query(
+        `INSERT INTO positions (election_id, name, display_order, status)
+         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,
+        [state.dbElectionId, pos.name, pos.displayOrder, pos.status]
+      );
+      if (pr.rows.length > 0) pos.id = String(pr.rows[0].id);
+    }
+    console.log('Seeded', state.positions.length, 'positions to DB.');
+
+    // ── Seed candidates ────────────────────────────────────────────────────────
+    for (const cand of state.candidates) {
+      // Match position by name since IDs have changed
+      const pos = state.positions.find(p => p.id === cand.positionId);
+      if (!pos) continue;
+      const cr = await dbClient.query(
+        `INSERT INTO candidates (election_id, position_id, full_name, class_name, photo_url, manifesto, slogan, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING RETURNING id`,
+        [state.dbElectionId, pos.id, cand.fullName, cand.className, cand.photo, cand.manifesto, cand.slogan, cand.status]
+      );
+      if (cr.rows.length > 0) cand.id = String(cr.rows[0].id);
+      cand.positionId = pos.id; // update positionId to DB id
+    }
+    console.log('Seeded', state.candidates.length, 'candidates to DB.');
+
   } catch (e) {
     console.warn('seedElectionIfNeeded error:', e.message);
   }
@@ -223,6 +255,10 @@ function createInitialState() {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeStudentId(value) { return (value || '').trim().toUpperCase(); }
+
+function randomPin() {
+  return String(Math.floor(Math.random() * 90000) + 10000); // 10000–99999
+}
 
 function getElectionStatus() {
   const now = new Date();
@@ -358,18 +394,27 @@ async function syncElectionFromDb() {
   try {
     const eid = state.dbElectionId;
 
-    const [posRes, candRes, voterRes, voteRes] = await Promise.all([
-      dbClient.query('SELECT * FROM positions WHERE election_id=$1 AND status!=\'inactive\' ORDER BY display_order', [eid]),
+    const [elecRes, posRes, candRes, voterRes, voteRes] = await Promise.all([
+      dbClient.query('SELECT * FROM elections WHERE id=$1', [eid]),
+      dbClient.query('SELECT * FROM positions WHERE election_id=$1 ORDER BY display_order', [eid]),
       dbClient.query('SELECT * FROM candidates WHERE election_id=$1 ORDER BY id', [eid]),
       dbClient.query('SELECT * FROM eligible_voters WHERE election_id=$1 ORDER BY id', [eid]),
       dbClient.query('SELECT * FROM vote_records WHERE election_id=$1', [eid]),
     ]);
 
-    state.positions = posRes.rows.map((r) => ({ id: String(r.id), name: r.name, displayOrder: r.display_order, status: r.status }));
-    state.candidates = candRes.rows.map((r) => ({ id: String(r.id), positionId: String(r.position_id), studentId: r.student_id || '', fullName: r.full_name, className: r.class_name || '', photo: r.photo_url || '', manifesto: r.manifesto || '', slogan: r.slogan || '', status: r.status }));
-    state.eligibleStudents = voterRes.rows.map((r) => ({ id: String(r.id), studentId: r.student_id, firstName: r.first_name || '', middleName: r.middle_name || '', lastName: r.last_name || '', dateOfBirth: r.date_of_birth || null, gender: r.gender || '', email: r.email || '', phone: r.phone || '', className: r.class_name || '', sectionName: r.section_name || '', active: r.active, pin: r.pin || '1234' }));
-    state.votes = voteRes.rows.map((r) => ({ id: String(r.id), electionId: String(r.election_id), positionId: String(r.position_id), candidateId: String(r.candidate_id), studentId: r.student_id, submittedAt: r.submitted_at }));
-    electionResponseCache = { ts: 0, data: null }; // invalidate cache
+    // Sync election timing & status from DB
+    if (elecRes.rows.length > 0) {
+      const e = elecRes.rows[0];
+      if (e.start_time) state.settings.electionStartDate = new Date(e.start_time).toISOString();
+      if (e.end_time)   state.settings.electionEndDate   = new Date(e.end_time).toISOString();
+      if (e.status)     state.settings.electionState     = e.status;
+    }
+
+    state.positions        = posRes.rows.map((r) => ({ id: String(r.id), name: r.name, displayOrder: r.display_order, status: r.status }));
+    state.candidates       = candRes.rows.map((r) => ({ id: String(r.id), positionId: String(r.position_id), studentId: r.student_id || '', fullName: r.full_name, className: r.class_name || '', photo: r.photo_url || '', manifesto: r.manifesto || '', slogan: r.slogan || '', status: r.status }));
+    state.eligibleStudents = voterRes.rows.map((r) => ({ id: String(r.id), studentId: r.student_id, firstName: r.first_name || '', middleName: r.middle_name || '', lastName: r.last_name || '', dateOfBirth: r.date_of_birth || null, gender: r.gender || '', email: r.email || '', phone: r.phone || '', className: r.class_name || '', sectionName: r.section_name || '', active: r.active, pin: r.pin || '', hasVoted: r.has_voted || false, votedAt: r.voted_at || null }));
+    state.votes            = voteRes.rows.map((r) => ({ id: String(r.id), electionId: String(r.election_id), positionId: String(r.position_id), candidateId: String(r.candidate_id), studentId: r.student_id, submittedAt: r.submitted_at }));
+    electionResponseCache  = { ts: 0, data: null };
   } catch (e) {
     console.warn('syncElectionFromDb error:', e.message);
   }
@@ -420,28 +465,52 @@ app.get('/api/election', async (req, res) => {
 // ── API: student login ────────────────────────────────────────────────────────
 app.post('/api/student/login', async (req, res) => {
   const studentId = normalizeStudentId(req.body.studentId || '');
-  const pin = (req.body.pin || '').toString();
+  const pin = (req.body.pin || '').toString().trim();
 
   if (dbConnected) await syncElectionFromDb();
 
   const eligibleStudent = state.eligibleStudents.find((s) => s.studentId === studentId && s.active);
-  if (!eligibleStudent) return sendJson(res, { success: false, message: 'Student ID not recognised. Please contact the election administrator.' }, 401);
+  if (!eligibleStudent) {
+    return sendJson(res, { success: false, message: 'Student ID not recognised. Please contact the election administrator.' }, 401);
+  }
 
   const electionStatus = getElectionStatus();
   if (electionStatus === 'upcoming') return sendJson(res, { success: false, message: 'The election has not started yet.' }, 403);
-  if (electionStatus === 'closed') return sendJson(res, { success: false, message: 'The election has ended. Voting is no longer available.' }, 403);
+  if (electionStatus === 'closed')   return sendJson(res, { success: false, message: 'The election has ended. Voting is no longer available.' }, 403);
 
-  if (state.settings.requirePin && state.settings.studentAuthMethod === 'pin') {
+  // PIN check — always enforced when requirePin is true (regardless of auth method)
+  if (state.settings.requirePin) {
     if (!pin || pin !== eligibleStudent.pin) {
       state.failedLogins.push({ studentId, reason: 'invalid-pin', timestamp: new Date().toISOString() });
       return sendJson(res, { success: false, message: 'Student ID or PIN is incorrect.' }, 401);
     }
   }
 
+  // ── One-vote-per-student enforcement ──────────────────────────────────────
+  // Check the has_voted flag first (fastest), then fall back to vote_records count
+  if (eligibleStudent.hasVoted) {
+    return sendJson(res, {
+      success: false,
+      alreadyVoted: true,
+      message: 'You have already cast your vote. Each student may only vote once. Thank you for participating.',
+    }, 403);
+  }
+
+  // Secondary check against actual vote records (catches edge cases where flag may be stale)
   const allPositions = state.positions.filter((p) => p.status !== 'inactive');
-  const completedVotes = allPositions.filter((p) => state.votes.some((v) => v.studentId === studentId && v.positionId === p.id)).length;
-  if (completedVotes >= allPositions.length) {
-    return sendJson(res, { success: false, message: 'You have successfully completed your voting. Thank you for participating.' }, 200);
+  const votedPositions = allPositions.filter((p) => state.votes.some((v) => v.studentId === studentId && v.positionId === p.id));
+  if (votedPositions.length >= allPositions.length && allPositions.length > 0) {
+    // Flag wasn't set — fix it now
+    eligibleStudent.hasVoted = true;
+    eligibleStudent.votedAt = new Date().toISOString();
+    if (dbConnected && dbClient) {
+      dbClient.query('UPDATE eligible_voters SET has_voted=TRUE, voted_at=NOW() WHERE id=$1', [eligibleStudent.id]).catch(() => {});
+    }
+    return sendJson(res, {
+      success: false,
+      alreadyVoted: true,
+      message: 'You have already cast your vote. Each student may only vote once. Thank you for participating.',
+    }, 403);
   }
 
   const sessionId = `session-${studentId}-${Date.now()}`;
@@ -509,6 +578,23 @@ app.post('/api/submit-vote', async (req, res) => {
         [state.dbElectionId, positionId, candidateId, normalizedStudentId, `anon-${normalizedStudentId}`]
       ).catch(() => {});
     }
+  }
+
+  // ── Mark student as voted and destroy their session ───────────────────────
+  const voter = state.eligibleStudents.find((s) => s.studentId === normalizedStudentId);
+  if (voter) {
+    voter.hasVoted = true;
+    voter.votedAt = new Date().toISOString();
+    if (dbConnected && dbClient) {
+      dbClient.query(
+        'UPDATE eligible_voters SET has_voted=TRUE, voted_at=NOW() WHERE id=$1',
+        [voter.id]
+      ).catch(() => {});
+    }
+  }
+  // Invalidate session so PIN cannot be reused
+  if (state.studentSessions && state.studentSessions[normalizedStudentId]) {
+    delete state.studentSessions[normalizedStudentId];
   }
 
   addAuditLog('Vote submitted', normalizedStudentId, { voteCount: savedVotes.length });
@@ -713,6 +799,7 @@ app.post('/api/admin/students/bulk-import', requireAdmin, async (req, res) => {
     if (state.eligibleStudents.some((s) => s.studentId === normId)) { skipped.push({ id: normId, reason: 'duplicate' }); continue; }
 
     const dob = normalizeDate(row.date_of_birth);
+    const pin = randomPin();
     const student = {
       id: `stu-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
       studentId: normId,
@@ -726,7 +813,7 @@ app.post('/api/admin/students/bulk-import', requireAdmin, async (req, res) => {
       className: row.class_name || '',
       sectionName: row.section_name || '',
       active: true,
-      pin: '1234',
+      pin,
     };
 
     if (dbConnected && dbClient && state.dbElectionId) {
@@ -735,11 +822,11 @@ app.post('/api/admin/students/bulk-import', requireAdmin, async (req, res) => {
           `INSERT INTO eligible_voters
              (election_id, student_id, first_name, middle_name, last_name,
               date_of_birth, gender, email, phone, class_name, section_name, pin, active)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'1234',true)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true)
            ON CONFLICT (election_id, student_id) DO NOTHING RETURNING id`,
           [state.dbElectionId, normId, student.firstName, student.middleName, student.lastName,
            dob || null, student.gender, student.email, student.phone,
-           student.className, student.sectionName]
+           student.className, student.sectionName, pin]
         );
         if (r.rows.length > 0) { student.id = String(r.rows[0].id); }
         else { skipped.push({ id: normId, reason: 'duplicate in db' }); continue; }
@@ -755,13 +842,14 @@ app.post('/api/admin/students/bulk-import', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/students', requireAdmin, async (req, res) => {
-  const { studentId, firstName = '', middleName = '', lastName = '', dateOfBirth = null, gender = '', email = '', phone = '', className = '', sectionName = '', active = true, pin = '1234' } = req.body || {};
+  const { studentId, firstName = '', middleName = '', lastName = '', dateOfBirth = null, gender = '', email = '', phone = '', className = '', sectionName = '', active = true } = req.body || {};
   if (!studentId) return sendJson(res, { success: false, message: 'Student ID is required.' }, 400);
 
   const normId = normalizeStudentId(studentId);
   if (state.eligibleStudents.some((s) => s.studentId === normId)) return sendJson(res, { success: false, message: 'Student ID already exists.' }, 409);
 
   const dob = normalizeDate(dateOfBirth);
+  const pin = randomPin();
   const student = { id: `stu-${Date.now()}`, studentId: normId, firstName, middleName, lastName, dateOfBirth: dob, gender, email, phone, className, sectionName, active, pin };
 
   if (dbConnected && dbClient && state.dbElectionId) {
@@ -816,7 +904,37 @@ app.delete('/api/admin/students/:id', requireAdmin, async (req, res) => {
   sendJson(res, { success: true, message: 'Student removed.' });
 });
 
-// ── API: election control ─────────────────────────────────────────────────────
+// ── API: admin PIN list export ─────────────────────────────────────────────────
+app.get('/api/admin/students/pins', requireAdmin, async (req, res) => {
+  if (dbConnected) await syncElectionFromDb();
+  const list = state.eligibleStudents
+    .filter(s => s.active)
+    .map(s => ({
+      studentId: s.studentId,
+      name: [s.firstName, s.middleName, s.lastName].filter(Boolean).join(' '),
+      className: s.className,
+      sectionName: s.sectionName,
+      pin: s.pin,
+    }))
+    .sort((a, b) => a.className.localeCompare(b.className) || a.studentId.localeCompare(b.studentId));
+  sendJson(res, { success: true, total: list.length, pins: list });
+});
+
+// ── API: admin regenerate all PINs ────────────────────────────────────────────
+app.post('/api/admin/students/regenerate-pins', requireAdmin, async (req, res) => {
+  if (dbConnected) await syncElectionFromDb();
+  let updated = 0;
+  for (const s of state.eligibleStudents) {
+    const pin = randomPin();
+    s.pin = pin;
+    if (dbConnected && dbClient) {
+      await dbClient.query('UPDATE eligible_voters SET pin=$1 WHERE id=$2', [pin, s.id]).catch(() => {});
+    }
+    updated++;
+  }
+  addAuditLog('All PINs regenerated', adminSession.username, { count: updated });
+  sendJson(res, { success: true, message: `Regenerated PINs for ${updated} students.` });
+});
 app.post('/api/admin/election/control', requireAdmin, async (req, res) => {
   const { action } = req.body || {};
   if (!['start', 'pause', 'resume', 'close'].includes(action)) return sendJson(res, { success: false, message: 'Invalid election action.' }, 400);

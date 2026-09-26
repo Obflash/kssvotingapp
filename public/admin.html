@@ -74,6 +74,8 @@
     </header>
 
     <main class="container dashboard-shell">
+      <!-- Global toast for auth/load errors — always visible regardless of active tab -->
+      <div id="globalToast" style="display:none;background:#ffe7e7;border:1px solid #f9b8b8;color:#d94f4f;padding:12px 18px;border-radius:12px;font-weight:700;margin-bottom:16px;"></div>
       <div class="dashboard-topbar">
         <div>
           <p class="eyebrow">Administration</p>
@@ -168,6 +170,11 @@
 
       <!-- ── TAB: Students ── -->
       <div class="tab-pane" id="tab-students">
+        <div class="button-row no-print" style="margin-bottom:16px;">
+          <button id="printPinsBtn" class="secondary-btn small-btn">🖨 Print PIN Sheet</button>
+          <button id="exportPinsCsvBtn" class="secondary-btn small-btn">⬇ Export PINs as CSV</button>
+          <button id="regeneratePinsBtn" class="danger-btn small-btn">↺ Regenerate All PINs</button>
+        </div>
         <div class="admin-grid">
           <div class="panel">
             <div class="panel-header"><h3>Add Single Student</h3></div>

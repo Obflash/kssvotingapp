@@ -78,9 +78,12 @@ function setupStudentLogin() {
       const s = data.status || 'live';
       const label = { live: '🟢 Election Live', upcoming: '🟠 Election Not Started', closed: '🔴 Election Closed', paused: '🟠 Election Paused' };
       if (loginStatusBadge) loginStatusBadge.textContent = label[s] || '🟢 Election Live';
-      if (s === 'live' && data.settings && data.settings.requirePin) pinFieldWrapper.classList.remove('hidden');
+      // PIN is always required — always show the field
+      if (pinFieldWrapper) pinFieldWrapper.classList.remove('hidden');
     })
-    .catch(() => {});
+    .catch(() => {
+      if (pinFieldWrapper) pinFieldWrapper.classList.remove('hidden');
+    });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -93,6 +96,21 @@ function setupStudentLogin() {
         sessionStorage.setItem('studentId', result.studentId);
         sessionStorage.setItem('studentSessionId', result.sessionId);
         window.location.href = '/student-vote.html';
+      } else if (result.alreadyVoted) {
+        // Show a prominent already-voted banner instead of a plain error
+        const msg = document.querySelector('#loginMessage');
+        if (msg) {
+          msg.innerHTML = `
+            <div style="background:#eaf8ef;border:2px solid #1e8f5b;border-radius:14px;padding:18px 20px;text-align:center;margin-top:14px;">
+              <div style="font-size:2rem;margin-bottom:8px;">✅</div>
+              <strong style="color:#1e8f5b;font-size:1.1rem;">Vote Already Recorded</strong>
+              <p style="margin:8px 0 0;color:#374151;font-size:.95rem;">
+                Your vote has already been submitted successfully.<br>
+                Each student may only vote once. Thank you for participating!
+              </p>
+            </div>`;
+          msg.style.color = 'inherit';
+        }
       } else {
         showMessage(messageNode, result.message, true);
       }
@@ -180,12 +198,29 @@ function setupBallotPage() {
     try {
       const result = await apiRequest('/api/submit-vote', { method: 'POST', body: JSON.stringify({ studentId, sessionId, selections }) });
       if (result.success) {
+        // Clear session so PIN can never be reused from this browser
         sessionStorage.removeItem('studentSessionId');
-        notice.innerHTML = `Vote Successfully Recorded<br>Thank you for participating in the Kumasi STEM JHS Student Election.`;
+        sessionStorage.removeItem('studentId');
+        notice.innerHTML = `
+          <div style="text-align:center;padding:20px 0;">
+            <div style="font-size:3rem;margin-bottom:12px;">✅</div>
+            <strong style="font-size:1.3rem;color:var(--success);">Vote Successfully Recorded!</strong>
+            <p style="margin:12px 0 0;color:var(--text);">
+              Thank you for participating in the Kumasi STEM JHS Student Election.<br>
+              Your vote has been securely saved.
+            </p>
+            <a href="/" style="display:inline-block;margin-top:18px;padding:12px 24px;background:var(--primary);color:#fff;border-radius:12px;font-weight:700;text-decoration:none;">Return to Home</a>
+          </div>`;
         notice.style.display = 'block';
         form.classList.add('hidden');
-      } else { showMessage(notice, result.message, true); notice.style.display = 'block'; }
-    } catch (error) { showMessage(notice, error.message || 'Unable to submit vote.', true); notice.style.display = 'block'; }
+      } else {
+        showMessage(notice, result.message, true);
+        notice.style.display = 'block';
+      }
+    } catch (error) {
+      showMessage(notice, error.message || 'Unable to submit vote.', true);
+      notice.style.display = 'block';
+    }
   });
 
   loadBallot();
@@ -271,17 +306,19 @@ function renderStudents(students) {
           <th style="padding:8px 10px;text-align:left;">Class</th>
           <th style="padding:8px 10px;text-align:left;">Section</th>
           <th style="padding:8px 10px;text-align:left;">Gender</th>
+          <th style="padding:8px 10px;text-align:left;">PIN</th>
           <th style="padding:8px 10px;text-align:left;">Status</th>
           <th style="padding:8px 10px;text-align:left;">Actions</th>
         </tr></thead>
         <tbody>
           ${students.map((s) => `
             <tr style="border-bottom:1px solid var(--line);">
-              <td style="padding:8px 10px;">${s.studentId}</td>
+              <td style="padding:8px 10px;font-family:monospace;">${s.studentId}</td>
               <td style="padding:8px 10px;">${[s.firstName, s.middleName, s.lastName].filter(Boolean).join(' ') || '—'}</td>
               <td style="padding:8px 10px;">${s.className || '—'}</td>
               <td style="padding:8px 10px;">${s.sectionName || '—'}</td>
               <td style="padding:8px 10px;">${s.gender || '—'}</td>
+              <td style="padding:8px 10px;font-family:monospace;font-weight:700;letter-spacing:.1em;color:var(--primary);">${s.pin || '—'}</td>
               <td style="padding:8px 10px;"><span style="color:${s.active ? 'var(--success)' : 'var(--danger)'}">${s.active ? 'Active' : 'Inactive'}</span></td>
               <td style="padding:8px 10px;">
                 <button class="secondary-btn small-btn" data-action="toggle-student" data-id="${s.id}" style="margin-right:4px;">${s.active ? 'Disable' : 'Enable'}</button>
@@ -411,6 +448,10 @@ async function loadDashboard() {
   const token = sessionStorage.getItem('adminToken');
   if (!token) { window.location.href = '/admin-login.html'; return; }
 
+  // Hide any previous global error
+  const toast = document.querySelector('#globalToast');
+  if (toast) toast.style.display = 'none';
+
   try {
     const result = await apiRequest('/api/admin/summary', { headers: { 'x-admin-token': token } });
     renderSummaryCards(result.summary);
@@ -429,8 +470,10 @@ async function loadDashboard() {
     if (eti) eti.value = settings.electionTitle || '';
     if (rvi) rvi.value = settings.resultsVisibility || 'live';
   } catch (error) {
-    const msg = document.querySelector('#adminMessage');
-    showMessage(msg, error.message || 'Unauthorized access.', true);
+    if (toast) {
+      toast.textContent = '⚠️ ' + (error.message || 'Failed to load dashboard.');
+      toast.style.display = 'block';
+    }
     if (error.message && error.message.toLowerCase().includes('unauthorized')) {
       window.location.href = '/admin-login.html';
     }
@@ -466,16 +509,18 @@ function setupPhotoUpload() {
         headers: { 'x-admin-token': token },
         body: formData,
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         finalInput.value = data.photoUrl;
         hint.textContent = '✅ ' + file.name + ' uploaded';
         urlInput.value = '';
       } else {
-        hint.textContent = '❌ Upload failed: ' + (data.message || 'Unknown error');
+        hint.textContent = '❌ Upload failed: ' + (data.message || 'Server error');
+        preview.classList.add('hidden');
       }
     } catch (e) {
       hint.textContent = '❌ Upload error: ' + (e.message || 'Network error');
+      preview.classList.add('hidden');
     }
   });
 
@@ -668,7 +713,11 @@ function setupCsvImport() {
   }
 
   // Import button — looks up DOM fresh every click
-  document.querySelector('#csvImportBtn').addEventListener('click', async () => {
+  const csvImportBtnEl = document.querySelector('#csvImportBtn');
+  const csvClearBtnEl  = document.querySelector('#csvClearBtn');
+  if (!csvImportBtnEl || !csvClearBtnEl) return;
+
+  csvImportBtnEl.addEventListener('click', async () => {
     const importBtn = el('#csvImportBtn');
     const statusEl  = el('#csvStatus');
 
@@ -702,7 +751,7 @@ function setupCsvImport() {
   });
 
   // Clear button
-  document.querySelector('#csvClearBtn').addEventListener('click', () => {
+  csvClearBtnEl.addEventListener('click', () => {
     _csvParsedRows = [];
     const previewTable  = el('#csvPreviewTable');
     const importActions = el('#csvImportActions');
@@ -795,7 +844,7 @@ function bindAdminEvents() {
     if (action === 'toggle-student') {
       const id = button.dataset.id;
       const summaryRes = await apiRequest('/api/admin/summary', { headers: { 'x-admin-token': token } });
-      const student = (summaryRes.students || []).find((s) => s.id === id);
+      const student = (summaryRes.students || []).find((s) => String(s.id) === String(id));
       if (!student) return;
       await apiRequest(`/api/admin/students/${id}`, { method: 'PUT', headers: { 'x-admin-token': token }, body: JSON.stringify({ active: !student.active }) });
       loadDashboard();
@@ -843,6 +892,102 @@ function bindAdminEvents() {
       if (hint)    hint.textContent = '📁 Click or drag an image here to upload from your device';
       if (finalInput) finalInput.value = '';
       loadDashboard();
+    });
+  }
+
+  // ── PIN actions ─────────────────────────────────────────────────────────────
+  const printPinsBtn = document.querySelector('#printPinsBtn');
+  const exportPinsCsvBtn = document.querySelector('#exportPinsCsvBtn');
+  const regeneratePinsBtn = document.querySelector('#regeneratePinsBtn');
+
+  async function fetchPins() {
+    const token = sessionStorage.getItem('adminToken');
+    return apiRequest('/api/admin/students/pins', { headers: { 'x-admin-token': token } });
+  }
+
+  if (printPinsBtn) {
+    printPinsBtn.addEventListener('click', async () => {
+      const token = sessionStorage.getItem('adminToken');
+      const data = await fetchPins();
+      if (!data.success) { alert('Could not load PINs.'); return; }
+
+      // Group by class
+      const byClass = {};
+      for (const s of data.pins) {
+        const key = `${s.className} — Section ${s.sectionName}`;
+        if (!byClass[key]) byClass[key] = [];
+        byClass[key].push(s);
+      }
+
+      const win = window.open('', '_blank');
+      win.document.write(`
+        <!DOCTYPE html><html><head>
+        <title>Student PIN Sheet</title>
+        <style>
+          body{font-family:Arial,sans-serif;padding:24px;font-size:13px;}
+          h1{font-size:18px;margin-bottom:4px;}
+          h2{font-size:14px;margin:20px 0 8px;background:#edf3ff;padding:6px 10px;border-radius:6px;}
+          table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+          th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;}
+          th{background:#f0f4ff;}
+          .pin{font-family:monospace;font-weight:700;font-size:14px;letter-spacing:.15em;color:#113e7c;}
+          @media print{button{display:none}}
+        </style>
+        </head><body>
+        <h1>Kumasi STEM JHS — Student PIN Sheet</h1>
+        <p style="color:#666;margin-bottom:16px;">Generated: ${new Date().toLocaleString()} &nbsp;|&nbsp; Total students: ${data.total}<br>
+        <strong>Keep this document confidential.</strong> Distribute each PIN only to the named student.</p>
+        <button onclick="window.print()" style="padding:8px 16px;background:#113e7c;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;">🖨 Print</button>
+        ${Object.entries(byClass).map(([cls, students]) => `
+          <h2>${cls} (${students.length} students)</h2>
+          <table>
+            <thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>PIN</th></tr></thead>
+            <tbody>${students.map((s, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td style="font-family:monospace;">${s.studentId}</td>
+                <td>${s.name || '—'}</td>
+                <td class="pin">${s.pin}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`).join('')}
+        </body></html>`);
+      win.document.close();
+    });
+  }
+
+  if (exportPinsCsvBtn) {
+    exportPinsCsvBtn.addEventListener('click', async () => {
+      const data = await fetchPins();
+      if (!data.success) { alert('Could not load PINs.'); return; }
+      const header = 'student_id,name,class_name,section_name,pin';
+      const rows = data.pins.map(s =>
+        [s.studentId, `"${s.name}"`, `"${s.className}"`, s.sectionName, s.pin].join(',')
+      );
+      const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' });
+      const a = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(blob),
+        download: `student_pins_${new Date().toISOString().slice(0,10)}.csv`,
+      });
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
+  if (regeneratePinsBtn) {
+    regeneratePinsBtn.addEventListener('click', async () => {
+      if (!confirm('This will generate new PINs for ALL students. Old PINs will no longer work. Continue?')) return;
+      const token = sessionStorage.getItem('adminToken');
+      try {
+        const r = await apiRequest('/api/admin/students/regenerate-pins', {
+          method: 'POST',
+          headers: { 'x-admin-token': token },
+        });
+        alert(r.message);
+        loadDashboard();
+      } catch (e) {
+        alert('Failed: ' + e.message);
+      }
     });
   }
 

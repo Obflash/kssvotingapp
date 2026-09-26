@@ -119,6 +119,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eligible_voters' AND column_name='section_name') THEN
     ALTER TABLE eligible_voters ADD COLUMN section_name VARCHAR(64);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eligible_voters' AND column_name='has_voted') THEN
+    ALTER TABLE eligible_voters ADD COLUMN has_voted BOOLEAN DEFAULT FALSE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eligible_voters' AND column_name='voted_at') THEN
+    ALTER TABLE eligible_voters ADD COLUMN voted_at TIMESTAMPTZ;
+  END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_vote_records_student_position ON vote_records(election_id,student_id,position_id);
