@@ -26,8 +26,9 @@ function fetchElectionCached(force = false) {
 // ── API helper ────────────────────────────────────────────────────────────────
 async function apiRequest(url, options = {}) {
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || 'Request failed.');
@@ -150,23 +151,32 @@ function setupBallotPage() {
 
       form.innerHTML = ballot.map((position) => {
         const alreadyVoted = position.alreadyVoted;
-        const candidateCards = (position.candidates || []).map((candidate) => `
+        const candidateCards = (position.candidates || []).map((candidate) => {
+          const photoSrc = candidate.photo && !candidate.photo.startsWith('/uploads/') 
+            ? candidate.photo 
+            : candidate.photo || '';
+          return `
           <div class="candidate-card">
-            <img class="candidate-photo" src="${candidate.photo || 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=800&q=80'}" alt="${candidate.fullName}" />
+            <img class="candidate-photo"
+              src="${photoSrc || '/placeholder-avatar.svg'}"
+              alt="${candidate.fullName}"
+              onerror="this.onerror=null;this.src='/placeholder-avatar.svg';" />
             <h3>${candidate.fullName}</h3>
             <p class="muted">Class: ${candidate.className || 'N/A'}</p>
             <p class="muted">${candidate.slogan || 'Campaign slogan'}</p>
             <div class="option-row">
               <label><input type="radio" name="position-${position.id}" value="${candidate.id}" ${alreadyVoted ? 'disabled' : ''} /> Select</label>
             </div>
-          </div>`).join('');
+          </div>`;
+        }).join('');
+        const count = (position.candidates || []).length;
         return `
           <section class="position-section">
             <div class="position-title">
               <h2>${position.name.toUpperCase()}</h2>
               ${alreadyVoted ? '<span class="status-badge">✓ Voted</span>' : ''}
             </div>
-            <div class="candidate-grid">${candidateCards || '<p class="muted">No candidates available yet.</p>'}</div>
+            <div class="candidate-grid candidate-count-${count}">${candidateCards || '<p class="muted">No candidates available yet.</p>'}</div>
           </section>`;
       }).join('');
 
@@ -284,7 +294,10 @@ function renderCandidates(candidates) {
   list.innerHTML = (candidates || []).map((c) => `
     <div class="list-item">
       <div style="display:flex;align-items:center;gap:10px;">
-        <img src="${c.photo || 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=60&q=60'}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;" alt="${c.fullName}" />
+        <img src="${c.photo && !c.photo.startsWith('/uploads/') ? c.photo : '/placeholder-avatar.svg'}"
+          style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;"
+          alt="${c.fullName}"
+          onerror="this.onerror=null;this.src='/placeholder-avatar.svg';" />
         <div><strong>${c.fullName}</strong><small>${c.className || 'N/A'} • ${c.slogan || ''}</small></div>
       </div>
       <div class="button-row">
@@ -351,9 +364,11 @@ function renderResultsTab(results, settings, summary) {
   // Winners
   winnersGrid.innerHTML = (results.positions || []).map((pos) => {
     if (!pos.leader) return '';
+    const photo = pos.leader.photo && !pos.leader.photo.startsWith('/uploads/') ? pos.leader.photo : '/placeholder-avatar.svg';
     return `
       <div class="winner-card">
-        <img class="winner-photo" src="${pos.leader.photo || 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=140&q=80'}" alt="${pos.leader.fullName}" />
+        <img class="winner-photo" src="${photo}" alt="${pos.leader.fullName}"
+          onerror="this.onerror=null;this.src='/placeholder-avatar.svg';" />
         <div class="winner-info">
           <p style="margin:0 0 2px;font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">${pos.positionName}</p>
           <h4>${pos.leader.fullName}</h4>

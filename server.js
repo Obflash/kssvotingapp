@@ -389,6 +389,9 @@ app.use((req, res, next) => {
 });
 
 // ── DB sync helpers ───────────────────────────────────────────────────────────
+// Track when election state was last manually set by admin so sync doesn't overwrite it
+let _lastElectionStateChange = 0;
+
 async function syncElectionFromDb() {
   if (!dbConnected || !dbClient || !state.dbElectionId) return;
   try {
@@ -402,12 +405,17 @@ async function syncElectionFromDb() {
       dbClient.query('SELECT * FROM vote_records WHERE election_id=$1', [eid]),
     ]);
 
-    // Sync election timing & status from DB
+    // Sync election status from DB — but only if no admin change in the last 10 seconds
     if (elecRes.rows.length > 0) {
       const e = elecRes.rows[0];
+      const timeSinceChange = Date.now() - _lastElectionStateChange;
+      if (timeSinceChange > 10000) {
+        // Safe to sync from DB
+        if (e.status) state.settings.electionState = e.status;
+      }
+      // Always sync timing
       if (e.start_time) state.settings.electionStartDate = new Date(e.start_time).toISOString();
       if (e.end_time)   state.settings.electionEndDate   = new Date(e.end_time).toISOString();
-      if (e.status)     state.settings.electionState     = e.status;
     }
 
     state.positions        = posRes.rows.map((r) => ({ id: String(r.id), name: r.name, displayOrder: r.display_order, status: r.status }));
@@ -937,18 +945,47 @@ app.post('/api/admin/students/regenerate-pins', requireAdmin, async (req, res) =
 });
 app.post('/api/admin/election/control', requireAdmin, async (req, res) => {
   const { action } = req.body || {};
-  if (!['start', 'pause', 'resume', 'close'].includes(action)) return sendJson(res, { success: false, message: 'Invalid election action.' }, 400);
-
-  const stateMap = { start: 'live', pause: 'paused', resume: 'live', close: 'closed' };
-  state.settings.electionState = stateMap[action];
-  electionResponseCache = { ts: 0, data: null };
-
-  if (dbConnected && dbClient && state.dbElectionId) {
-    dbClient.query('UPDATE elections SET status=$1 WHERE id=$2', [stateMap[action], state.dbElectionId]).catch(() => {});
+  if (!['start', 'pause', 'resume', 'close'].includes(action)) {
+    return sendJson(res, { success: false, message: 'Invalid election action.' }, 400);
   }
 
-  addAuditLog(`Election ${action}`, adminSession.username, { action });
-  sendJson(res, { success: true, message: `Election ${action}.`, status: getElectionStatus() });
+  const stateMap = { start: 'live', pause: 'paused', resume: 'live', close: 'closed' };
+  const newStatus = stateMap[action];
+
+  // When starting/resuming, extend the end time to 24h from now so it doesn't expire immediately
+  const now = new Date();
+  let newEndTime = null;
+  if (action === 'start' || action === 'resume') {
+    newEndTime = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h from now
+    state.settings.electionStartDate = now.toISOString();
+    state.settings.electionEndDate = newEndTime.toISOString();
+  }
+
+  // Update DB FIRST (await so we catch errors)
+  if (dbConnected && dbClient && state.dbElectionId) {
+    try {
+      if (newEndTime) {
+        await dbClient.query(
+          'UPDATE elections SET status=$1, start_time=$2, end_time=$3 WHERE id=$4',
+          [newStatus, now, newEndTime, state.dbElectionId]
+        );
+      } else {
+        await dbClient.query('UPDATE elections SET status=$1 WHERE id=$2', [newStatus, state.dbElectionId]);
+      }
+      console.log(`Election status updated to "${newStatus}" in DB.`);
+    } catch (e) {
+      console.warn('Failed to update election status in DB:', e.message);
+      return sendJson(res, { success: false, message: 'Database error: ' + e.message }, 500);
+    }
+  }
+
+  // Update in-memory state AFTER DB write succeeds
+  state.settings.electionState = newStatus;
+  _lastElectionStateChange = Date.now(); // prevent syncElectionFromDb from reverting this
+  electionResponseCache = { ts: 0, data: null };
+
+  addAuditLog(`Election ${action}`, adminSession.username, { action, newStatus });
+  sendJson(res, { success: true, message: `Election ${action}d successfully.`, status: getElectionStatus() });
 });
 
 // ── API: settings ─────────────────────────────────────────────────────────────

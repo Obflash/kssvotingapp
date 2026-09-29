@@ -379,8 +379,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 
 .candidate-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 220px));
   gap: 18px;
+  justify-content: start;
+}
+
+/* Single candidate — cap at 280px so it doesn't stretch full width */
+.candidate-count-1 {
+  grid-template-columns: minmax(200px, 280px);
+}
+
+/* 2 candidates — side by side, capped */
+.candidate-count-2 {
+  grid-template-columns: repeat(2, minmax(200px, 280px));
 }
 
 .candidate-card {
@@ -388,14 +399,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   border-radius: 18px;
   padding: 16px;
   background: linear-gradient(180deg, #fff 0%, #f7faff 100%);
+  width: 100%;
 }
 
 .candidate-photo {
   width: 100%;
-  height: 170px;
+  height: 180px;
   object-fit: cover;
-  border-radius: 14px;
+  object-position: top center;
+  border-radius: 12px;
   margin-bottom: 12px;
+  background: #dde5f1;
 }
 
 .candidate-card h3 {
